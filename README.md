@@ -111,17 +111,27 @@ Binova_Devops_gs/
 
 - Assinatura Azure ativa (ex.: Azure for Students);
 - Azure CLI instalada: `winget install -e --id Microsoft.AzureCLI`;
-- PowerShell e cliente SSH (nativo no Windows 10/11).
+- Azure Cloud Shell (Bash) no portal Azure — já autenticado e com Azure CLI e SSH (alternativa: PowerShell local com `az login`).
 
-### 6.2 Provisionar a VM com Azure CLI (PowerShell)
+### 6.2 Provisionar a VM com Azure CLI (Azure Cloud Shell - Bash)
 
-```powershell
-az login
+A assinatura Azure for Students possui a política *Allowed resource deployment regions* (brazilsouth, francecentral, spaincentral, centralus, northcentralus) e restrições de SKU por região. Por isso, a região e o tamanho foram validados antes da criação:
+
+```bash
 az account show --query "{nome:name,estado:state}" -o table
 
-az group create --name rg-binova-gs --location brazilsouth
+# regioes permitidas pela politica da assinatura
+az policy assignment list --query "[].{nome:displayName,regioes:parameters.listOfAllowedLocations.value}" -o json
 
-az vm create --resource-group rg-binova-gs --name vm-binova-gs --image Ubuntu2204 --size Standard_B2s --admin-username azureuser --generate-ssh-keys --public-ip-sku Standard
+# tamanhos liberados (sem restricao) na regiao escolhida
+az vm list-skus --location northcentralus --resource-type virtualMachines --query "[?length(restrictions)==\`0\` && starts_with(name,'Standard_B2')].name" -o tsv
+
+# quota de vCPUs
+az vm list-usage --location northcentralus --query "[?name.value=='cores' || name.value=='standardBasv2Family'].{nome:localName,uso:currentValue,limite:limit}" -o table
+
+az group create --name rg-binova-gs --location northcentralus
+
+az vm create --resource-group rg-binova-gs --name vm-binova-gs --image Ubuntu2204 --size Standard_B2als_v2 --admin-username azureuser --generate-ssh-keys --public-ip-sku Standard
 
 az vm open-port --resource-group rg-binova-gs --name vm-binova-gs --port 8080 --priority 1010
 
@@ -132,7 +142,7 @@ az vm show -d --resource-group rg-binova-gs --name vm-binova-gs --query "{nome:n
 
 ### 6.3 Acessar a VM
 
-```powershell
+```bash
 ssh azureuser@IP_PUBLICO_DA_VM
 ```
 
@@ -218,7 +228,7 @@ Os registros continuam no banco após recriar os containers.
 
 ### 6.11 Desligar a VM (evitar consumo de créditos)
 
-```powershell
+```bash
 az vm deallocate --resource-group rg-binova-gs --name vm-binova-gs
 az vm start --resource-group rg-binova-gs --name vm-binova-gs
 az group delete --name rg-binova-gs --yes --no-wait     # somente após a avaliação
@@ -226,16 +236,57 @@ az group delete --name rg-binova-gs --yes --no-wait     # somente após a avalia
 
 ## 7. Evidências
 
-Prints da execução na VM Azure estão em [`evidencias/`](evidencias/):
+Prints da execução na VM Azure (`vm-binova-gs`, IP 20.25.210.34), em [`evidencias/`](evidencias/):
 
-| # | Evidência |
-|---|---|
-| 01 | Resource Group e VM criados via Azure CLI |
-| 02 | SSH na VM (`hostname`), `docker --version` e `docker compose version` |
-| 03 | Estrutura de diretórios do projeto na VM |
-| 04 | `docker compose up -d --build` e `docker compose ps` |
-| 05 | Logs dos containers `app` e `db` |
-| 06 | Acesso aos containers e usuário não-root (`id`, `pwd`) |
-| 07 | CRUD funcionando pelo IP público da VM |
-| 08 | SELECT e JOIN direto no banco |
-| 09 | Volume nomeado e persistência após `down`/`up` |
+| # | Evidência | Print |
+|---|---|---|
+| 01 | Resource Group, VM e regras NSG (22/8080) via Azure CLI | [01-azure-cli.png](evidencias/01-azure-cli.png) |
+| 02 | SSH na VM (`hostname`, `whoami`), `docker --version` e `docker compose version` | [02-vm-docker.png](evidencias/02-vm-docker.png) |
+| 03 | Estrutura de diretórios do projeto na VM | [03-estrutura.png](evidencias/03-estrutura.png) |
+| 04 | `docker compose ps` — containers em background (app + db healthy) | [04-compose-ps.png](evidencias/04-compose-ps.png) |
+| 05 | Logs dos containers `db` e `app` | [05-logs.png](evidencias/05-logs.png) |
+| 06 | `docker compose exec` no app: usuário não-root `binova` e `WORKDIR /app` | [06-exec-usuario.png](evidencias/06-exec-usuario.png) |
+| 07 | CRUD completo pelo IP público da VM (POST/GET/PUT/DELETE + tabelas relacionadas) | [07-crud.png](evidencias/07-crud.png) |
+| 08 | SELECT e JOIN direto no PostgreSQL (4 tabelas relacionadas) | [08-select-join.png](evidencias/08-select-join.png) |
+| 09 | Volume nomeado `binova_pg_data` e dados preservados após `down`/`up` | [09-persistencia.png](evidencias/09-persistencia.png) |
+| 10 | API acessível pelo IP público da VM (`/actuator/health`) | [10-acesso-publico.png](evidencias/10-acesso-publico.png) |
+
+### 01 — Resource Group, VM e regras NSG (22/8080) via Azure CLI
+
+![01-azure-cli](evidencias/01-azure-cli.png)
+
+### 02 — SSH na VM (`hostname`, `whoami`), `docker --version` e `docker compose version`
+
+![02-vm-docker](evidencias/02-vm-docker.png)
+
+### 03 — Estrutura de diretórios do projeto na VM
+
+![03-estrutura](evidencias/03-estrutura.png)
+
+### 04 — `docker compose ps` — containers em background (app + db healthy)
+
+![04-compose-ps](evidencias/04-compose-ps.png)
+
+### 05 — Logs dos containers `db` e `app`
+
+![05-logs](evidencias/05-logs.png)
+
+### 06 — `docker compose exec` no app: usuário não-root `binova` e `WORKDIR /app`
+
+![06-exec-usuario](evidencias/06-exec-usuario.png)
+
+### 07 — CRUD completo pelo IP público da VM (POST/GET/PUT/DELETE + tabelas relacionadas)
+
+![07-crud](evidencias/07-crud.png)
+
+### 08 — SELECT e JOIN direto no PostgreSQL (4 tabelas relacionadas)
+
+![08-select-join](evidencias/08-select-join.png)
+
+### 09 — Volume nomeado `binova_pg_data` e dados preservados após `down`/`up`
+
+![09-persistencia](evidencias/09-persistencia.png)
+
+### 10 — API acessível pelo IP público da VM (`/actuator/health`)
+
+![10-acesso-publico](evidencias/10-acesso-publico.png)
