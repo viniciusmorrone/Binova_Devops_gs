@@ -1,0 +1,7 @@
+.git
+.env
+app/target
+app/data
+docs
+evidencias
+*.md
