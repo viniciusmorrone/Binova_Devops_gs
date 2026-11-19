@@ -32,43 +32,6 @@ Na disciplina de DevOps, utilizamos a API Java desenvolvida em Java Advanced e u
 
 ![Arquitetura macro Binova](docs/arquitetura.png)
 
-```mermaid
-
-flowchart LR
-
-    DEV["Administrador (Windows)<br/>Azure CLI + SSH"] -->|"az group create / az vm create<br/>az vm open-port 8080"| AZ
-
-    USR["Cidadão / Avaliador<br/>Navegador · Swagger · curl"] -->|"HTTP :8080 (IP público)"| NSG
-
-
-
-    subgraph AZ["Microsoft Azure · Resource Group rg-binova-gs"]
-
-        NSG["NSG · portas 22 (SSH) e 8080 (API)"] --> VM
-
-        subgraph VM["VM vm-binova-gs · Ubuntu 22.04 · Docker Engine + Docker Compose"]
-
-            subgraph NET["Docker network binova_net (bridge)"]
-
-                APP["Container binova-api<br/>Java 21 · Spring Boot<br/>USER binova · WORKDIR /app · porta 8080"]
-
-                DB[("Container binova-db<br/>PostgreSQL 16<br/>porta 5432 (somente 127.0.0.1)")]
-
-            end
-
-            VOL[("Volume nomeado<br/>binova_pg_data")]
-
-        end
-
-    end
-
-
-
-    APP -->|"JDBC jdbc:postgresql://db:5432/binova"| DB
-
-    DB -->|"/var/lib/postgresql/data"| VOL
-
-```
 
 | Componente | Detalhe |
 |---|---|
@@ -82,17 +45,7 @@ flowchart LR
 
 ## 3. Modelo de dados (tabelas relacionadas)
 
-```mermaid
-
-erDiagram
-
-    USUARIO ||--o{ OCORRENCIA : registra
-
-    PONTO_COLETA ||--o{ OCORRENCIA : possui
-
-    PONTO_COLETA ||--o{ LEITURA_SENSOR : recebe
-
-```
+![Modelo de dados do Binova em PostgreSQL](docs/Diagrama.png)
 
 As tabelas `usuario`, `ponto_coleta`, `leitura_sensor` e `ocorrencia` são criadas pelo Hibernate no PostgreSQL, com chaves estrangeiras `leitura_sensor.ponto_coleta_id → ponto_coleta.id` e `ocorrencia.ponto_coleta_id → ponto_coleta.id` / `ocorrencia.usuario_id → usuario.id`.
 
@@ -128,9 +81,9 @@ Binova_Devops_gs/
 
 ├── docs/
 
-│   ├── arquitetura.mmd       # fonte do diagrama
+│   ├── arquitetura.png       # arquitetura macro
 
-│   └── arquitetura.png       # arquitetura macro
+│   └── Diagrama.png          # modelo de dados PostgreSQL
 
 └── evidencias/               # prints da execução na VM Azure
 
