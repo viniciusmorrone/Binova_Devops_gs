@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
-# Binova | FIAP Global Solution 2026/2
-# Executar no Azure Cloud Shell (Bash). Cria VM se necessario e publica API + PostgreSQL.
 set -Eeuo pipefail
 
 RESOURCE_GROUP="${RESOURCE_GROUP:-rg-binova-gs}"
 VM_NAME="${VM_NAME:-vm-binova-gs}"
-LOCATION="${LOCATION:-northcentralus}"
-VM_SIZE="${VM_SIZE:-Standard_B2als_v2}"
+LOCATION="${LOCATION:-brazilsouth}"
+VM_SIZE="${VM_SIZE:-Standard_D2s_v4}"
 ADMIN_USER="${ADMIN_USER:-azureuser}"
 REPO_URL="${REPO_URL:-https://github.com/viniciusmorrone/Binova_Devops_gs.git}"
 
@@ -50,8 +48,12 @@ else
     --output none
 fi
 
-log "Garantindo acesso HTTP a API na porta 8080"
-# Azure CLI podera informar que regra ja existe; nesse caso nao altera a existente.
+log "Verificando acesso SSH (22) e API (8080)"
+if ! az network nsg rule list --resource-group "$RESOURCE_GROUP" \
+  --nsg-name "${VM_NAME}NSG" \
+  --query "[?destinationPortRange=='22' && access=='Allow' && direction=='Inbound'].name | [0]" -o tsv 2>/dev/null | grep -q .; then
+  az vm open-port --resource-group "$RESOURCE_GROUP" --name "$VM_NAME" --port 22 --priority 1000 --output none
+fi
 if ! az network nsg rule list --resource-group "$RESOURCE_GROUP" \
   --nsg-name "${VM_NAME}NSG" \
   --query "[?destinationPortRange=='8080' && access=='Allow'].name | [0]" -o tsv 2>/dev/null | grep -q .; then
@@ -141,7 +143,6 @@ echo 'BINOVA_DEPLOY_OK'
 REMOTE
 
 log "Instalando Docker e publicando o Binova pela propria Azure (Run Command)"
-# O Run Command executa na VM com permissoes de administrador; nao exige SSH local.
 if ! az vm run-command invoke \
     --resource-group "$RESOURCE_GROUP" \
     --name "$VM_NAME" \
